@@ -13,7 +13,22 @@
       "mcp__plugin_svelte_svelte__svelte-autofixer",
       "Bash(pnpm check *)",
       "Read(//Users/praktikant/.cargo/registry/src/**)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(hf --version)",
+      "Bash(hf)",
+      "Bash(curl -sSL \"https://raw.githubusercontent.com/huggingface/candle/refs/tags/0.10.2/candle-transformers/src/models/mod.rs\")",
+      "Bash(curl -sSL \"https://raw.githubusercontent.com/huggingface/candle/refs/tags/0.10.2/candle-transformers/src/models/mod.rs\" -w \"HTTP %{http_code}\\\\n\" -o /dev/null)",
+      "Bash(curl -sS \"https://api.github.com/repos/huggingface/candle/tags?per_page=10\")",
+      "Bash(python3 -c \"import json,sys; [print\\(t['name']\\) for t in json.load\\(sys.stdin\\)]\")",
+      "Bash(curl -sSL \"https://raw.githubusercontent.com/huggingface/candle/refs/tags/0.10.1/candle-transformers/src/models/mod.rs\")",
+      "Bash(curl -sSL \"https://raw.githubusercontent.com/huggingface/candle/refs/heads/main/candle-transformers/src/models/mod.rs\")",
+      "WebFetch(domain:static.crates.io)",
+      "WebFetch(domain:index.crates.io)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
   }
 }
