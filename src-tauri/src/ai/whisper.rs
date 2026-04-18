@@ -1,10 +1,12 @@
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 use candle_nn::VarBuilder;
-use candle_transformers::models::whisper::{audio, model, Config, HOP_LENGTH, N_FFT, SAMPLE_RATE};
-use hf_hub::{api::tokio::Api, Repo, RepoType};
+use candle_transformers::models::whisper::{audio, model, Config, N_FFT, SAMPLE_RATE};
+use hf_hub::{Repo, RepoType};
 use once_cell::sync::OnceCell;
 use tokenizers::Tokenizer;
 use tokio::sync::Mutex;
+use tauri::{AppHandle, Emitter};
+use crate::events::AI_STATUS;
 
 use crate::error::AppError;
 
@@ -61,12 +63,23 @@ fn compute_mel_filters(n_mels: usize, n_fft: usize, sample_rate: f32) -> Vec<f32
     filters
 }
 
-pub async fn load() -> Result<(), AppError> {
+pub fn is_loaded() -> bool {
+    MODEL.get().is_some()
+}
+
+pub async fn load(app: &AppHandle) -> Result<(), AppError> {
     if MODEL.get().is_some() {
         return Ok(());
     }
 
-    let api = Api::new().map_err(|e| AppError::Ai(e.to_string()))?;
+    let _ = app.emit(AI_STATUS, "Loading Whisper model...");
+    
+    let api = match std::env::var("HF_TOKEN") {
+        Ok(token) => hf_hub::api::tokio::ApiBuilder::new().with_token(Some(token)).build(),
+        Err(_) => hf_hub::api::tokio::Api::new(),
+    }
+    .map_err(|e| AppError::Ai(format!("Hugging Face API error: {}. Check HF_TOKEN.", e)))?;
+
     let repo = api.repo(Repo::with_revision(
         MODEL_REPO.to_string(),
         RepoType::Model,

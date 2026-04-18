@@ -2,6 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
 use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::HeapRb;
+use rubato::{FftFixedIn, Resampler};
 use serde::Serialize;
 use std::sync::{mpsc, Mutex};
 use std::time::Duration;
@@ -23,20 +24,20 @@ pub struct Recorder {
 unsafe impl Send for Recorder {}
 
 static RECORDER: Mutex<Option<Recorder>> = Mutex::new(None);
-/// Sends 5-second 16 kHz mono f32 PCM chunks to the transcription pipeline.
 pub static CHUNK_TX: Mutex<Option<mpsc::SyncSender<Vec<f32>>>> = Mutex::new(None);
+
+pub fn is_recording() -> bool {
+    RECORDER.lock().unwrap().is_some()
+}
 
 pub fn list_devices() -> Result<Vec<AudioDevice>, AppError> {
     let host = cpal::default_host();
-    let devices = host
-        .input_devices()
-        .map_err(|e| AppError::Audio(e.to_string()))?;
+    let devices = host.input_devices().map_err(|e| AppError::Audio(e.to_string()))?;
     Ok(devices
         .filter_map(|d| d.name().ok().map(|name| AudioDevice { name }))
         .collect())
 }
 
-/// Starts audio capture. Returns a receiver for 5-second PCM chunks (16 kHz mono).
 pub fn start(app: AppHandle) -> Result<mpsc::Receiver<Vec<f32>>, AppError> {
     let mut guard = RECORDER.lock().unwrap();
     if guard.is_some() {
@@ -53,13 +54,10 @@ pub fn start(app: AppHandle) -> Result<mpsc::Receiver<Vec<f32>>, AppError> {
         .map_err(|e| AppError::Audio(e.to_string()))?
         .into();
 
-    let sample_rate = config.sample_rate.0 as f32;
-    let frame_size = (sample_rate * 0.05) as usize; // 50 ms window for RMS
+    let sample_rate = config.sample_rate.0 as usize;
+    let frame_size = sample_rate / 20; // 50 ms at device rate
 
-    // Target: 5 s at the device's native sample rate, downsampled to 16 kHz later
-    let chunk_samples = (sample_rate * 5.0) as usize;
-
-    let rb = HeapRb::<f32>::new(chunk_samples * 2);
+    let rb = HeapRb::<f32>::new(sample_rate * 10); // 10 s buffer
     let (mut prod, mut cons) = rb.split();
 
     let stream = build_stream(&device, &config, move |data: &[f32]| {
@@ -69,47 +67,54 @@ pub fn start(app: AppHandle) -> Result<mpsc::Receiver<Vec<f32>>, AppError> {
     })
     .map_err(|e| AppError::Audio(e.to_string()))?;
 
-    stream
-        .play()
-        .map_err(|e| AppError::Audio(e.to_string()))?;
+    stream.play().map_err(|e| AppError::Audio(e.to_string()))?;
 
     let (chunk_tx, chunk_rx) = mpsc::sync_channel::<Vec<f32>>(4);
     *CHUNK_TX.lock().unwrap() = Some(chunk_tx);
 
-    // Background thread: emits RMS level events + sends 5-second chunks
     std::thread::spawn(move || {
-        let mut level_buf = vec![0f32; frame_size];
-        let mut accumulator: Vec<f32> = Vec::with_capacity(chunk_samples);
-        let target_sr = 16000.0_f32;
-        let downsample_ratio = (sample_rate / target_sr).round() as usize;
+        const TARGET_SR: usize = 16000;
+        const CHUNK_SECS: usize = 5;
+        const OVERLAP_SECS: f32 = 0.5;
+
+        let mut resampler = FftFixedIn::<f32>::new(sample_rate, TARGET_SR, frame_size, 2, 1)
+            .expect("Failed to create resampler");
+
+        let mut read_buf = vec![0f32; frame_size];
+        let mut input_spill: Vec<f32> = Vec::new();
+        let mut accumulator: Vec<f32> = Vec::new();
+        let target_len = TARGET_SR * CHUNK_SECS;
+        let overlap_len = (TARGET_SR as f32 * OVERLAP_SECS) as usize;
 
         loop {
             std::thread::sleep(Duration::from_millis(50));
-            let n = cons.pop_slice(&mut level_buf);
+            let n = cons.pop_slice(&mut read_buf);
             if n == 0 {
                 continue;
             }
 
             // RMS level event
-            let rms = (level_buf[..n].iter().map(|s| s * s).sum::<f32>() / n as f32).sqrt();
+            let rms = (read_buf[..n].iter().map(|s| s * s).sum::<f32>() / n as f32).sqrt();
             let _ = app.emit(AUDIO_LEVEL, rms);
 
-            // Accumulate downsampled samples into the 5-second chunk buffer
-            let downsampled = level_buf[..n]
-                .chunks(downsample_ratio.max(1))
-                .map(|c| c[0]);
-            accumulator.extend(downsampled);
+            // Buffer samples until we have a full frame for the resampler
+            input_spill.extend_from_slice(&read_buf[..n]);
+            while input_spill.len() >= frame_size {
+                let chunk: Vec<f32> = input_spill.drain(..frame_size).collect();
+                match resampler.process(&[chunk], None) {
+                    Ok(out) => accumulator.extend_from_slice(&out[0]),
+                    Err(e) => eprintln!("resample error: {e}"),
+                }
+            }
 
-            // When we have 5 s of 16 kHz audio, send the chunk
-            let target_chunk_len = (target_sr * 5.0) as usize;
-            if accumulator.len() >= target_chunk_len {
-                let chunk: Vec<f32> = accumulator.drain(..target_chunk_len).collect();
-                // Keep 0.5-second overlap for next window
-                let overlap = (target_sr * 0.5) as usize;
-                accumulator.splice(0..0, chunk[target_chunk_len - overlap..].iter().copied());
+            if accumulator.len() >= target_len {
+                let outchunk: Vec<f32> = accumulator.drain(..target_len).collect();
+                // Keep overlap for next window
+                let tail = outchunk[target_len - overlap_len..].to_vec();
+                accumulator.splice(0..0, tail);
                 if let Ok(tx) = CHUNK_TX.lock() {
                     if let Some(ref s) = *tx {
-                        let _ = s.try_send(chunk);
+                        let _ = s.try_send(outchunk);
                     }
                 }
             }
@@ -122,7 +127,7 @@ pub fn start(app: AppHandle) -> Result<mpsc::Receiver<Vec<f32>>, AppError> {
 
 pub fn stop() -> Result<(), AppError> {
     *CHUNK_TX.lock().unwrap() = None;
-    *RECORDER.lock().unwrap() = None; // drops Stream
+    *RECORDER.lock().unwrap() = None;
     Ok(())
 }
 
