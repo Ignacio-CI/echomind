@@ -4,6 +4,8 @@ export const es: Record<TranslationKey, string> = {
   appTitle: "EchoMind",
   startRecording: "Iniciar grabación",
   stopRecording: "Detener grabación",
+  starting: "Iniciando IA...",
+  preparing: "Preparando...",
   statusReady: "Listo",
   statusRecording: "Grabando…",
   statusTranscribing: "Transcribiendo…",

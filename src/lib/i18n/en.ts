@@ -2,6 +2,8 @@ export const en = {
   appTitle: "EchoMind",
   startRecording: "Start Recording",
   stopRecording: "Stop Recording",
+  starting: "Starting AI...",
+  preparing: "Preparing...",
   statusReady: "Ready",
   statusRecording: "Recording…",
   statusTranscribing: "Transcribing…",
