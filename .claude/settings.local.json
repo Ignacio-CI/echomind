@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(pnpm install *)",
+      "Bash(cargo check *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm dlx *)",
+      "Bash(pnpm exec *)",
+      "Bash(pkill -f \"shadcn-svelte\")",
+      "WebFetch(domain:shadcn-svelte.com)",
+      "Bash(node -e \"const m = require\\('/Users/praktikant/Library/Caches/pnpm/dlx/dc3nzogfedqjl7m2xkaxkbk3ii/19da18a4bd8-2e50/node_modules/.pnpm/shadcn-svelte@1.2.7_svelte@5.55.4/node_modules/shadcn-svelte/dist/libraries-tdyxKhrQ.mjs'\\); console.log\\(Object.keys\\(m\\)\\)\")",
+      "mcp__plugin_svelte_svelte__svelte-autofixer",
+      "Bash(pnpm check *)",
+      "Read(//Users/praktikant/.cargo/registry/src/**)",
+      "Bash(git add *)"
+    ]
+  }
+}

@@ -15,10 +15,12 @@ node_modules/
 build/
 dist/
 .vite/
+/package
 *.log
 npm-debug.log*
 pnpm-debug.log*
-yarn-debug.log*
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
 # Env
 .env
@@ -46,4 +48,3 @@ models/
 
 # Logs
 logs/
-*.log
