@@ -1,0 +1,49 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / SvelteKit
+node_modules/
+.svelte-kit/
+build/
+dist/
+.vite/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/WixTools/
+**/*.rs.bk
+
+# Model caches / large artifacts
+models/
+*.gguf
+*.safetensors
+*.onnx
+
+# SQLite
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
+
+# Logs
+logs/
+*.log

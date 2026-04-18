@@ -1,0 +1,6 @@
+{
+    "enabledPlugins": {
+        "svelte@svelte": true,
+        "context7@claude-plugins-official": true
+    }
+}
